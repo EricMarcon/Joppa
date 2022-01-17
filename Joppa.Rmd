@@ -365,3 +365,122 @@ Nouvelle autocorrélation:
 ```{r}
 acf(posterior, lag.max = 100)
 ```
+
+
+# Inférence à partir des données réelles
+
+## Données
+
+```{r}
+data <- read.table("data/data_TOT.txt", header = TRUE)[, -4]
+```
+
+
+Les unités de temps sont dans le vecteur `Y`.
+```{r}
+Y <- data$Y + 1825 # Première année : 1826
+nTemps <- length(Y)
+```
+
+
+La variable expliquée est $S$.
+Le nombre d'espèces décrites au début de la période d'étude est $S_0$.
+```{r}
+S <- data$S
+S_0 <- 1   # L. terrestris par Linné 
+```
+
+La variable explicative est :
+
+- $T$ : le nombre de taxonomistes actifs chaque année.
+```{r}
+# 5 au début, 20 à la fin, bruité       # A remplacer par les vraies données
+T <- 10^(1 + Y/nTemps + rnorm(length(Y), sd=0.02)) /5
+```
+
+Les paramètres sont $\theta = (\beta_1, \beta_2, S_T, \sigma)$.
+
+
+## Exécution
+
+```{r}
+# Nombre de pas de la chaîne
+iterations <- 1e+6
+# Ecart-type de la marche aléatoire (pour chaque paramètre)
+sigma_prop <- c(2E-3, 2E-5, 1E5, 2E-1)
+# Valeur initiale des paramètres
+theta_0 <- c(
+  beta_1/2,   # beta_1
+  beta_2/2,   # beta_2
+  S_T/2,      # S_T
+  sigma/2     # sigma
+  )
+names(theta_0) <- c("beta_1", "beta_2", "S_T", "EcartType")
+# Lancement de la chaîne de Markov
+chain <- MetropolisMCMC(S, T, Y, S_0, sigma_prop, theta_0, iterations)
+```
+
+
+## Résultats
+
+```{r}
+# Evolution de la vraisemblance
+par(mfrow = c(1, 2))
+plot(chain[, length(theta_0) + 1], type = "l", main = "Evolution de la vraisemblance", xlab = "Pas", ylab = "log Vraisemblance")
+burn_in <- iterations/10
+plot(chain[-(1:burn_in), length(theta_0) + 1], type = "l", main = "Après convergence", xlab = "Pas", ylab = "log Vraisemblace")
+```
+
+Evolution des paramètres:
+```{r}
+par(mfrow = c(2, 2))
+plot(chain[-(1:burn_in), 1], type = "l", main = "", xlab = "beta_1", ylab = "")
+plot(chain[-(1:burn_in), 2], type = "l", main = "", xlab = "beta_2", ylab = "")
+plot(chain[-(1:burn_in), 3], type = "l", main = "", xlab = "S_T", ylab = "")
+plot(chain[-(1:burn_in), 4], type = "l", main = "", xlab = "sigma", ylab = "")
+```
+
+
+## Taux d'acceptation
+
+```{r}
+# Taux d'acceptation de la chaine de Markov
+(acceptance <- 1 - mean(duplicated(chain[-(1:burn_in), ])))
+```
+
+## Distribution des paramètres
+
+```{r}
+par(mfrow = c(1, length(theta_0)))
+for (i in 1:length(theta_0)) {
+    Titre <- paste("Distribution de", names(theta_0)[i])
+    Mediane <- format(median(chain[-(1:burn_in), i]), digits = 4)
+    hist(chain[-(1:burn_in), i], xlab = paste("Mediane :", Mediane), main = Titre)
+    abline(v = Mediane, col = "red")
+}
+```
+
+
+## Autocorrélation
+
+```{r}
+acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 1000)
+```
+Eclaircie:
+```{r}
+# Distribution a posteriori. Elimination du prechauffage et de la vraisemblance, éclaircie.
+posterior <- chain[-(1:burn_in), 1:(ncol(chain)-2)][seq(1, 
+    iterations - burn_in, by = 500), ]
+# Nouvelle distribution des paramètres
+par(mfrow = c(1, length(theta_0)))
+for (i in 1:length(theta_0)) {
+    Titre <- paste("Distribution de", names(theta_0)[i])
+    Mediane <- format(median(posterior[, i]), digits = 4)
+    hist(posterior[, i], xlab = paste("Mediane :", Mediane), main = Titre)
+    abline(v = Mediane, col = "red")
+}
+```
+Nouvelle autocorrélation:
+```{r}
+acf(posterior, lag.max = 100)
+```
