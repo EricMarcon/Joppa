@@ -372,13 +372,14 @@ acf(posterior, lag.max = 100)
 ## Données
 
 ```{r}
-data <- read.table("data/data_TOT.txt", header = TRUE)[, -4]
+data <- read.csv2("data/Lombrics.csv")
+data <- data[data$S>0, ]
 ```
 
 
 Les unités de temps sont dans le vecteur `Y`.
 ```{r}
-Y <- data$Y + 1825 # Première année : 1826
+Y <- data$Y # Première année : 1826, chaque période dure 5 ans
 nTemps <- length(Y)
 ```
 
@@ -392,28 +393,40 @@ S_0 <- 1   # L. terrestris par Linné
 
 La variable explicative est :
 
-- $T$ : le nombre de taxonomistes actifs chaque année.
+- $T$ : le nombre de taxonomistes actifs à chaque période.
 ```{r}
-# 5 au début, 20 à la fin, bruité       # A remplacer par les vraies données
-T <- 10^(1 + Y/nTemps + rnorm(length(Y), sd=0.02)) /5
+T <- data$T
 ```
 
-Les paramètres sont $\theta = (\beta_1, \beta_2, S_T, \sigma)$.
+
+## Prior
+
+La vraisemblance des paramètres est:
+```{r}
+ll_prior <- function(theta, S_0) {
+    # Log-vraisemblance de chaque paramètre dans sa loi a priori
+    prior1 <- dunif(theta[1], min = 0, max = 1, log = TRUE)   # beta_1
+    prior2 <- dunif(theta[2], min = 0, max = 1, log = TRUE)   # beta_2
+    prior3 <- dunif(theta[3], min = S_0, max = 1E6, log = TRUE)  # S_T
+    prior4 <- dunif(theta[4], min = 0, max = 1000, log = TRUE)   # sigma
+    return(prior1 + prior2 + prior3 + prior4)
+}
+```
 
 
 ## Exécution
 
 ```{r}
 # Nombre de pas de la chaîne
-iterations <- 1e+6
+iterations <- 1e+5
 # Ecart-type de la marche aléatoire (pour chaque paramètre)
-sigma_prop <- c(2E-3, 2E-5, 1E5, 2E-1)
+sigma_prop <- c(1E-1, 1E-2, 1E6, 10)/100
 # Valeur initiale des paramètres
 theta_0 <- c(
-  beta_1/2,   # beta_1
-  beta_2/2,   # beta_2
-  S_T/2,      # S_T
-  sigma/2     # sigma
+  1E-3,  # beta_1
+  1E-4,  # beta_2
+  5E4,   # S_T
+  10     # sigma
   )
 names(theta_0) <- c("beta_1", "beta_2", "S_T", "EcartType")
 # Lancement de la chaîne de Markov
