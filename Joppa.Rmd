@@ -373,13 +373,14 @@ acf(posterior, lag.max = 100)
 
 ```{r}
 data <- read.csv2("data/Lombrics.csv")
-data <- data[data$S>0, ]
+# data <- data[-(1:13), ]
+data <- data[data$Y>0, ] 
 ```
 
 
 Les unités de temps sont dans le vecteur `Y`.
 ```{r}
-Y <- data$Y # Première année : 1826, chaque période dure 5 ans
+Y <- data$Y # Première année : 1891, chaque période dure 5 ans
 nTemps <- length(Y)
 ```
 
@@ -388,7 +389,7 @@ La variable expliquée est $S$.
 Le nombre d'espèces décrites au début de la période d'étude est $S_0$.
 ```{r}
 S <- data$S
-S_0 <- 1   # L. terrestris par Linné 
+S_0 <- 1 + 35 # L. terrestris par Linné 
 ```
 
 La variable explicative est :
@@ -418,15 +419,15 @@ ll_prior <- function(theta, S_0) {
 
 ```{r}
 # Nombre de pas de la chaîne
-iterations <- 1e+5
+iterations <- 1e+6
 # Ecart-type de la marche aléatoire (pour chaque paramètre)
-sigma_prop <- c(1E-1, 1E-2, 1E6, 10)/100
+sigma_prop <- c(1E-3, 1E-5, 1E4, 1)/10
 # Valeur initiale des paramètres
 theta_0 <- c(
   1E-3,  # beta_1
-  1E-4,  # beta_2
-  5E4,   # S_T
-  10     # sigma
+  1E-5,  # beta_2
+  1E4,   # S_T
+  1     # sigma
   )
 names(theta_0) <- c("beta_1", "beta_2", "S_T", "EcartType")
 # Lancement de la chaîne de Markov
@@ -477,13 +478,14 @@ for (i in 1:length(theta_0)) {
 ## Autocorrélation
 
 ```{r}
-acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 1000)
+acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 10000)
 ```
+
 Eclaircie:
 ```{r}
 # Distribution a posteriori. Elimination du prechauffage et de la vraisemblance, éclaircie.
 posterior <- chain[-(1:burn_in), 1:(ncol(chain)-2)][seq(1, 
-    iterations - burn_in, by = 500), ]
+    iterations - burn_in, by = 5000), ]
 # Nouvelle distribution des paramètres
 par(mfrow = c(1, length(theta_0)))
 for (i in 1:length(theta_0)) {
@@ -493,7 +495,66 @@ for (i in 1:length(theta_0)) {
     abline(v = Mediane, col = "red")
 }
 ```
+
 Nouvelle autocorrélation:
 ```{r}
 acf(posterior, lag.max = 100)
 ```
+
+# Nombre d'espèces estimé
+
+```{r}
+library(entropart)
+(S_est <- median(posterior[, 3]))
+as.SimTest(S_est, posterior[, 3]) %>% autoplot
+```
+
+# Prédictions
+
+```{r}
+# Paramètres
+beta_1 <- median(posterior[, 1])
+beta_2 <- median(posterior[, 2])
+S_T <-    median(posterior[, 3])
+sigma <-  median(posterior[, 4])
+
+# Stockage des S_i
+S <- numeric(length(data$Y))
+sum_S <- numeric(length(data$Y) + 1)
+sum_S[1] <- S_0
+# Calcul de S_i à chaque temps
+for (i in seq_along(data$Y)) {
+  S[i] <- exp(log(S_T*beta_1*T[i] 
+                    + beta_2*S_T*T[i]*Y[i] 
+                    + beta_1*T[i]*sum_S[i] 
+                    + beta_2*T[i]*Y[i]*sum_S[i]) 
+                + rnorm(1, sd=sigma))
+  # Cumul des espèces découvertes
+  sum_S[i+1] <- sum_S[i] + S[i]
+}
+# Figure
+tibble(Y, Estime=sum_S[-1], Observe=cumsum(data$S) + 35) %>% 
+  pivot_longer(cols = c("Estime", "Observe")) %>% 
+  ggplot() +
+    geom_line(aes(x=Y, y=value, color=name)) +
+    scale_y_log10()
+```
+
+# Paramètres testés
+
+## A partir de Y=1
+
+```{r}
+# Ecart-type de la marche aléatoire (pour chaque paramètre)
+sigma_prop <- c(1E-3, 1E-5, 1E4, 1)/10
+# Valeur initiale des paramètres
+theta_0 <- c(
+  1E-3,  # beta_1
+  1E-5,  # beta_2
+  1E4,   # S_T
+  1     # sigma
+  )
+```
+
+Estimation : 12000 espèces, mode à gauche.
+
