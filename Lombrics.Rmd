@@ -1,5 +1,5 @@
 ---
-title: "Joppa"
+title: "Estimation du nombres d'espèces de Lombrics par la méthode de Joppa"
 output:
   html_document:
     toc: yes
@@ -266,8 +266,10 @@ par(mfrow = c(1, length(theta_0)))
 for (i in 1:length(theta_0)) {
     Titre <- paste("Distribution de", names(theta_0)[i])
     Mediane <- format(median(chain[-(1:burn_in), i]), digits = 4)
-    hist(chain[-(1:burn_in), i], xlab = paste("Mediane :", Mediane), main = Titre)
+    Moyenne <- format(mean(chain[-(1:burn_in), i]), digits = 4)
+    hist(chain[-(1:burn_in), i], xlab = paste("Mediane :", Mediane, "\n", "Moyenne :", Moyenne), main = Titre)
     abline(v = Mediane, col = "red")
+    abline(v = Moyenne, col = "green")
 }
 ```
 
@@ -288,9 +290,12 @@ par(mfrow = c(1, length(theta_0)))
 for (i in 1:length(theta_0)) {
     Titre <- paste("Distribution de", names(theta_0)[i])
     Mediane <- format(median(posterior[, i]), digits = 4)
-    hist(posterior[, i], xlab = paste("Mediane :", Mediane), main = Titre)
+    Moyenne <- format(mean(posterior[, i]), digits = 4)
+    hist(posterior[, i], xlab = paste("Mediane :", Mediane, "\n", "Moyenne :", Moyenne), main = Titre)
     abline(v = Mediane, col = "red")
+    abline(v = Moyenne, col = "green")
 }
+
 ```
 
 Nouvelle autocorrélation:
@@ -343,10 +348,20 @@ Qualité de prédiction du modèle estimé: les paramètres sont les médianes d
 # Médiane
 beta_1 <- median(posterior[, 1])
 beta_2 <- median(posterior[, 2])
-S_T <-    median(posterior[, 3])
+(S_T <-    median(posterior[, 3]))
 sigma <-  median(posterior[, 4])
 Ajustement(data, beta_1, beta_2, S_T, sigma)
+```
 
+Les moyennes surestiment le nombre d'espèces.
+
+```{r}
+# Moyenne
+beta_1 <- mean(posterior[, 1])
+beta_2 <- mean(posterior[, 2])
+(S_T <-   mean(posterior[, 3]))
+sigma <-  mean(posterior[, 4])
+Ajustement(data, beta_1, beta_2, S_T, sigma)
 ```
 
 La robustesse de l'estimation est évaluée en prenant les valeurs extrêmes du nombre d'espèces estimées.
@@ -356,7 +371,7 @@ La robustesse de l'estimation est évaluée en prenant les valeurs extrêmes du 
 iteration <- which.max(posterior[, 3])
 beta_1 <- posterior[iteration, 1]
 beta_2 <- posterior[iteration, 2]
-(S_T <-    posterior[iteration, 3])
+(S_T <-   posterior[iteration, 3])
 sigma <-  posterior[iteration, 4]
 Ajustement(data, beta_1, beta_2, S_T, sigma)
 ```
@@ -366,7 +381,7 @@ Ajustement(data, beta_1, beta_2, S_T, sigma)
 iteration <- which.min(posterior[, 3])
 beta_1 <- posterior[iteration, 1]
 beta_2 <- posterior[iteration, 2]
-(S_T <-    posterior[iteration, 3])
+(S_T <-   posterior[iteration, 3])
 sigma <-  posterior[iteration, 4]
 Ajustement(data, beta_1, beta_2, S_T, sigma)
 ```
