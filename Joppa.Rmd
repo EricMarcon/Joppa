@@ -1,5 +1,5 @@
 ---
-title: "Joppa"
+title: "Méthode de Joppa pour l'estimation du nombre d'espèces d'un groupe taxonomique"
 output:
   html_document:
     toc: yes
@@ -38,7 +38,7 @@ Packages <- c("tidyverse")
 InstallPackages(Packages)
 # knitr options
 knitr::opts_chunk$set(
-  cache=FALSE, # Cache chunk results
+  cache = TRUE, # Cache chunk results
   echo = TRUE, # Show R chunks
   warning=FALSE, # Hide warnings
   # Books only: figures with side captions
@@ -348,7 +348,7 @@ for (i in 1:length(theta_0)) {
 acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 1000)
 ```
 
-Eclaircie:
+Éclaircie:
 ```{r}
 # Distribution a posteriori. Elimination du prechauffage et de la vraisemblance, éclaircie.
 posterior <- chain[-(1:burn_in), 1:(ncol(chain)-2)][seq(1, 
