@@ -33,12 +33,12 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 ```{r Options, include=FALSE}
 ### Customized options for this document
 # Add necessary packages here
-Packages <- c("tidyverse")
+Packages <- c("tidyverse", "entropart")
 # Install them
 InstallPackages(Packages)
 # knitr options
 knitr::opts_chunk$set(
-  cache=FALSE, # Cache chunk results
+  cache = TRUE, # Cache chunk results
   echo = TRUE, # Show R chunks
   warning=FALSE, # Hide warnings
   # Books only: figures with side captions
@@ -62,117 +62,47 @@ knitr::opts_chunk$set(dev.args=list(bg="transparent"))
 set.seed(973)
 ```
 
-# Génération des données
+# Données
 
-Les paramètres du modèle sont:
-
-- le nombre total d'espèces,
 ```{r}
-S_T <- 81000
+data <- read.csv2("data/Lombrics.csv")
+# data <- data[-(1:13), ]
+data <- data[data$S>0, ] 
 ```
-
-- la proportion des espèces inconnues identifiées par unité de temps (5ans) et par taxonomiste au début de la période d'étude,
-```{r}
-beta_1 <- 20/S_T
-```
-
-- l'augmentation annuelle de cette proportion
-```{r}
-beta_2 <- beta_1/100
-```
-
-
-Les paramètres de la simulation sont:
-
-- Le nombre d'unités de temps pour lequel les données sont disponibles,
-```{r}
-nTemps <- 50
-```
-
-- L'erreur du modèle.
-```{r}
-sigma <- 0.2
-```
-
 
 Les données sont :
 
--  Le nombre d'unités de temps passé depuis le début de la période d'étude $Y_i=i$ pour $i \in [1, nTemps]$,
+-  Le nombre d'unités de temps passé depuis le début de la période d'étude $Y_i=i$,
 ```{r}
-Y <- 1:nTemps
+Y <- data$Y
+```
+
+- Le nombre d'espèces découvertes $S_i$ à chaque unité de temps, 
+```{r}
+S <- data$S
 ```
 
 - Le nombre cumulé d'espèces découvertes, qui augmente à chaque unité de temps,
 ```{r}
-sum_S <- numeric(nTemps+1)
 # Valeur initiale
-sum_S[1] <- 200
+S_0 <- 1 # L. terrestris par Linné, 1758
 ```
 
-
-- Le nombre de taxonomistes actifs $T_i$ à chaque unité de temps, simulé par un modèle log-linéaire.
+- Le nombre de taxonomistes actifs $T_i$ à chaque unité de temps, 
 ```{r}
-# 10 au début, 100 à la fin, bruité
-T <- 10^(1 + Y/nTemps + rnorm(length(Y), sd=0.02))
-# Figure
-tibble(Y, T) %>% 
-  ggplot() +
-    geom_line(aes(x=Y, y=T)) +
-    scale_y_log10()
-```
-
-
-Le logarithme du nombre d'espèces découvertes à chaque unité de temps est donné par le modèle
-$$ \log{S_i} = \log{\left( S_T \beta_1 T_i + \beta_2 S_T T_i Y_i + \beta_1 T_i \sum{S_i} - \beta_2 T_i Y_i \sum{S_i} \right)} 
-             + \mathcal{N}\left(0, \sigma \right)$$
-
-Il doit être simulé pas à pas à cause du terme $\sum{S_i}$, le cumul du nombres d'espèces découvertes.
-```{r}
-# Stockage des S_i
-S <- numeric(nTemps)
-# Calcul de S_i à chaque temps
-for (i in 1:nTemps) {
-  S[i] <- exp(log(S_T*beta_1*T[i] 
-                    + beta_2*S_T*T[i]*Y[i] 
-                    + beta_1*T[i]*sum_S[i] 
-                    + beta_2*T[i]*Y[i]*sum_S[i]) 
-                + rnorm(1, sd=sigma))
-  # Cumul des espèces découvertes
-  sum_S[i+1] <- sum_S[i] + S[i]
-}
-# Figure
-tibble(Y, S) %>% 
-  ggplot() +
-    geom_line(aes(x=Y, y=S)) +
-    scale_y_log10()
+T <- data$T
 ```
 
 
 # Inférence
 
-## Données 
-
-Le nombre d'observations est `nTemps`.
-Les unités de temps sont dans le vecteur `Y`.
-```{r}
-nTemps <- nTemps  # A remplacer par les vraies données
-Y <- 1:nTemps
-```
-
+Le logarithme du nombre d'espèces découvertes à chaque unité de temps est donné par le modèle 
+$$\log{S_i} = \log{\left( S_T \beta_1 T_i + \beta_2 S_T T_i Y_i + \beta_1 T_i \sum{S_i} - \beta_2 T_i Y_i \sum{S_i} \right)} + \mathcal{N}\left(0, \sigma \right)$$.
 
 La variable expliquée est $S$.
 Le nombre d'espèces décrites au début de la période d'étude est $S_0$.
-```{r}
-S <- S            # A remplacer par les vraies données
-S_0 <- sum_S[1]   # A remplacer par les vraies données
-```
 
-La variable explicative est :
-
-- $T$ : le nombre de taxonomistes actifs chaque année.
-```{r}
-T <- T            # A remplacer par les vraies données
-```
+La variable explicative est $T$ : le nombre de taxonomistes actifs chaque année.
 
 Les paramètres sont $\theta = (\beta_1, \beta_2, S_T, \sigma)$.
 
@@ -217,9 +147,9 @@ La vraisemblance des paramètres est:
 ```{r}
 ll_prior <- function(theta, S_0) {
     # Log-vraisemblance de chaque paramètre dans sa loi a priori
-    prior1 <- dunif(theta[1], min = 0, max = 1E-2, log = TRUE)   # beta_1
-    prior2 <- dunif(theta[2], min = 0, max = 1E-3, log = TRUE)   # beta_2
-    prior3 <- dunif(theta[3], min = S_0, max = 1E6, log = TRUE)  # S_T
+    prior1 <- dunif(theta[1], min = 0, max = 1, log = TRUE)      # beta_1
+    prior2 <- dunif(theta[2], min = 0, max = 1, log = TRUE)      # beta_2
+    prior3 <- dunif(theta[3], min = S_0, max = 1E5, log = TRUE)  # S_T
     prior4 <- dunif(theta[4], min = 0, max = 1000, log = TRUE)   # sigma
     return(prior1 + prior2 + prior3 + prior4)
 }
@@ -286,15 +216,15 @@ MetropolisMCMC <- function(S, T, Y, S_0, sigma_prop, theta_0, iterations) {
 
 ```{r}
 # Nombre de pas de la chaîne
-iterations <- 1e+6
+iterations <- 1e+7
 # Ecart-type de la marche aléatoire (pour chaque paramètre)
-sigma_prop <- c(2E-5, 2E-7, 3000, 2E-2)
+sigma_prop <- c(1E-3, 1E-5, 1E4, 1)/10
 # Valeur initiale des paramètres
 theta_0 <- c(
-  beta_1/2,   # beta_1
-  beta_2/2,   # beta_2
-  S_T/2,      # S_T
-  sigma/2     # sigma
+  1E-2,  # beta_1
+  1E-6,  # beta_2
+  1E4,   # S_T
+  1     # sigma
   )
 names(theta_0) <- c("beta_1", "beta_2", "S_T", "EcartType")
 # Lancement de la chaîne de Markov
@@ -348,11 +278,11 @@ for (i in 1:length(theta_0)) {
 acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 1000)
 ```
 
-Eclaircie:
+Éclaircie:
 ```{r}
 # Distribution a posteriori. Elimination du prechauffage et de la vraisemblance, éclaircie.
 posterior <- chain[-(1:burn_in), 1:(ncol(chain)-2)][seq(1, 
-    iterations - burn_in, by = 500), ]
+    iterations - burn_in, by = 5000), ]
 # Nouvelle distribution des paramètres
 par(mfrow = c(1, length(theta_0)))
 for (i in 1:length(theta_0)) {
@@ -366,4 +296,85 @@ for (i in 1:length(theta_0)) {
 Nouvelle autocorrélation:
 ```{r}
 acf(posterior, lag.max = 100)
+```
+
+
+# Nombre d'espèces estimé
+
+```{r}
+library("tidyverse")
+library("entropart")
+(S_est <- median(posterior[, 3]))
+as.SimTest(S_est, posterior[, 3]) %>% autoplot
+```
+
+# Prédictions
+
+```{r}
+# Graphique du nombre cumulé d'espèces observé (data) et prédit (paramètres du modèle)
+Ajustement <- function(data, beta_1, beta_2, S_T, sigma) {
+  # Stockage des S_i
+  S <- numeric(length(data$Y))
+  sum_S <- numeric(length(data$Y) + 1)
+  sum_S[1] <- S_0
+  # Calcul de S_i à chaque temps
+  for (i in seq_along(data$Y)) {
+    S[i] <- exp(log(S_T*beta_1*T[i] 
+                      + beta_2*S_T*T[i]*Y[i] 
+                      + beta_1*T[i]*sum_S[i] 
+                      + beta_2*T[i]*Y[i]*sum_S[i]) 
+                  + rnorm(1, sd=sigma))
+    # Cumul des espèces découvertes
+    sum_S[i+1] <- sum_S[i] + S[i]
+  }
+  # Figure
+  tibble(`Année`=c(1817, 1817+5*data$Y), `Estimé`=sum_S, `Observé`=c(S_0, cumsum(data$S)+S_0)) %>% 
+    pivot_longer(cols = c("Estimé", "Observé")) %>% 
+    rename(`Nb espèces`=name, `Nombre`=value) %>% 
+    ggplot() +
+      geom_line(aes(x=`Année`, y=`Nombre`, color=`Nb espèces`)) +
+      scale_y_log10() %>% 
+    return
+}
+```
+
+Qualité de prédiction du modèle estimé: les paramètres sont les médianes des distributions.
+```{r}
+# Médiane
+beta_1 <- median(posterior[, 1])
+beta_2 <- median(posterior[, 2])
+S_T <-    median(posterior[, 3])
+sigma <-  median(posterior[, 4])
+Ajustement(data, beta_1, beta_2, S_T, sigma)
+
+```
+
+La robustesse de l'estimation est évaluée en prenant les valeurs extrêmes du nombre d'espèces estimées.
+
+```{r}
+# Nombre d'espèces maximal
+iteration <- which.max(posterior[, 3])
+beta_1 <- posterior[iteration, 1]
+beta_2 <- posterior[iteration, 2]
+(S_T <-    posterior[iteration, 3])
+sigma <-  posterior[iteration, 4]
+Ajustement(data, beta_1, beta_2, S_T, sigma)
+```
+
+```{r}
+# Nombre d'espèces minimal
+iteration <- which.min(posterior[, 3])
+beta_1 <- posterior[iteration, 1]
+beta_2 <- posterior[iteration, 2]
+(S_T <-    posterior[iteration, 3])
+sigma <-  posterior[iteration, 4]
+Ajustement(data, beta_1, beta_2, S_T, sigma)
+```
+
+L'ajustement du modèle aux données est bon dans tous les cas.
+
+L'estimation du nombre total d'espèces est corrélée négativement aux paramètres d'efficacité des taxonomistes: le modèle est donc peu discriminant.
+
+```{r}
+cor(posterior)
 ```
