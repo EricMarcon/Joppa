@@ -66,7 +66,7 @@ set.seed(973)
 
 ```{r}
 data <- read.csv2("data/Lombrics.csv")
-# data <- data[-(1:13), ]
+# Elimination des périodes sans observations
 data <- data[data$S>0, ] 
 ```
 
@@ -121,7 +121,7 @@ ll_S_theta <- function(S, T, Y, S_0, theta) {
   nTemps <- length(Y)
   # Stockage des prédictions du modèle et de leur cumul
   prediction <- numeric(nTemps)
-  sum_S <- numeric(nTemps+1)
+  sum_S <- numeric(nTemps + 1)
   # Valeur initiale
   sum_S[1] <- S_0
   # Valeurs prédites par le modèle
@@ -133,7 +133,9 @@ ll_S_theta <- function(S, T, Y, S_0, theta) {
     sum_S[i + 1] <- sum_S[i] + prediction[i]
   }
   # Log-vraisemblance de chaque valeur de y
-  likelihoods <- suppressWarnings(dnorm(log(S), mean = log(prediction), sd = theta[4], log = TRUE))
+  likelihoods <- suppressWarnings(
+    dnorm(log(S), mean = log(prediction), sd = theta[4], log = TRUE)
+  )
   # Possibilité de NaN 
   ll <- sum(likelihoods)
   # Vraisemblance nulle dans ce cas
@@ -146,12 +148,12 @@ ll_S_theta <- function(S, T, Y, S_0, theta) {
 La vraisemblance des paramètres est:
 ```{r}
 ll_prior <- function(theta, S_0) {
-    # Log-vraisemblance de chaque paramètre dans sa loi a priori
-    prior1 <- dunif(theta[1], min = 0, max = 1, log = TRUE)      # beta_1
-    prior2 <- dunif(theta[2], min = 0, max = 1, log = TRUE)      # beta_2
-    prior3 <- dunif(theta[3], min = S_0, max = 1E5, log = TRUE)  # S_T
-    prior4 <- dunif(theta[4], min = 0, max = 1000, log = TRUE)   # sigma
-    return(prior1 + prior2 + prior3 + prior4)
+  # Log-vraisemblance de chaque paramètre dans sa loi a priori
+  prior1 <- dunif(theta[1], min = 0, max = 1, log = TRUE)      # beta_1
+  prior2 <- dunif(theta[2], min = 0, max = 1, log = TRUE)      # beta_2
+  prior3 <- dunif(theta[3], min = S_0, max = 2E5, log = TRUE)  # S_T
+  prior4 <- dunif(theta[4], min = 0, max = 1000, log = TRUE)   # sigma
+  return(prior1 + prior2 + prior3 + prior4)
 }
 ```
 
@@ -161,53 +163,53 @@ ll_prior <- function(theta, S_0) {
 Fonction de proposition :
 ```{r}
 proposal <- function(theta, sigma_prop) {
-    return(rnorm(length(theta), mean = theta, sd = sigma_prop))
+  return(rnorm(length(theta), mean = theta, sd = sigma_prop))
 }
 ```
 
 Chaîne de Markov :
 ```{r} 
 MetropolisMCMC <- function(S, T, Y, S_0, sigma_prop, theta_0, iterations) {
-    # Stockage. Chaque ligne du tableau contient une itération ; les colonnes contiennent theta
-    chain <- matrix(nrow = iterations + 1, ncol = length(theta_0))
-    # Noms des paramètres
-    colnames(chain) <- names(theta_0)
-    # Stockage des vraisemblances (1: ll_S_theta, 2: ll_prior)
-    ll_data <- matrix(nrow = iterations + 1, ncol = 2)
-    colnames(ll_data) <- c("data", "prior")
-    # Valeurs initiales
-    chain[1, ] <- theta_0
-    ll_data[1, 1] <- ll_S_theta(S, T, Y, S_0, theta_0)
-    ll_data[1, 2] <- ll_prior(theta_0, S_0)
-    # Initialisation d'une barre de progression
-    pgb <- txtProgressBar(min = 0, max = iterations)
-    # Chaîne de Markov
-    for (i in 1:iterations) {
-        # Proposition d'une valeur de theta
-        theta_proposal <- proposal(chain[i, ], sigma_prop)
-        # Vraisemblances
-        ll_data[i + 1, 1] <- ll_S_theta(S, T, Y, S_0, theta_proposal)
-        ll_data[i + 1, 2] <- ll_prior(theta_proposal, S_0)
-        # Acceptation
-        if (sum(ll_data[i, ]) == -Inf) {
-          # Acceptation systématique si la vraisemblance précédente était nulle
-          l_ratio <- Inf
-        } else {
-        # Rapport de vraisemblance entre la proposition et la valeur précédente de theta
-          l_ratio <- exp(sum(ll_data[i + 1, ]) - sum(ll_data[i, ]))
-        }
-        # Acceptation ou non
-        if (runif(1) < l_ratio) {
-            chain[i + 1, ] <- theta_proposal
-        } else {
-            chain[i + 1, ] <- chain[i, ]
-            # Conserver les valeurs de vraisemblance
-            ll_data[i + 1, ] <- ll_data[i, ]
-        }
-        setTxtProgressBar(pgb, i)
+  # Stockage. Chaque ligne du tableau contient une itération ; les colonnes contiennent theta
+  chain <- matrix(nrow = iterations + 1, ncol = length(theta_0))
+  # Noms des paramètres
+  colnames(chain) <- names(theta_0)
+  # Stockage des vraisemblances (1: ll_S_theta, 2: ll_prior)
+  ll_data <- matrix(nrow = iterations + 1, ncol = 2)
+  colnames(ll_data) <- c("data", "prior")
+  # Valeurs initiales
+  chain[1, ] <- theta_0
+  ll_data[1, 1] <- ll_S_theta(S, T, Y, S_0, theta_0)
+  ll_data[1, 2] <- ll_prior(theta_0, S_0)
+  # Initialisation d'une barre de progression
+  pgb <- txtProgressBar(min = 0, max = iterations)
+  # Chaîne de Markov
+  for (i in 1:iterations) {
+    # Proposition d'une valeur de theta
+    theta_proposal <- proposal(chain[i, ], sigma_prop)
+    # Vraisemblances
+    ll_data[i + 1, 1] <- ll_S_theta(S, T, Y, S_0, theta_proposal)
+    ll_data[i + 1, 2] <- ll_prior(theta_proposal, S_0)
+    # Acceptation
+    if (sum(ll_data[i, ]) == -Inf) {
+      # Acceptation systématique si la vraisemblance précédente était nulle
+      l_ratio <- Inf
+    } else {
+    # Rapport de vraisemblance entre la proposition et la valeur précédente de theta
+      l_ratio <- exp(sum(ll_data[i + 1, ]) - sum(ll_data[i, ]))
     }
-    # Retour d'un tableau complet: theta et vraisemblance
-    return(cbind(chain, LogVraisemblance = ll_data))
+    # Acceptation ou non
+    if (runif(1) < l_ratio) {
+      chain[i + 1, ] <- theta_proposal
+    } else {
+      chain[i + 1, ] <- chain[i, ]
+      # Conserver les valeurs de vraisemblance
+      ll_data[i + 1, ] <- ll_data[i, ]
+    }
+    setTxtProgressBar(pgb, i)
+  }
+  # Retour d'un tableau complet: theta et vraisemblance
+  return(cbind(chain, LogVraisemblance = ll_data))
 }
 ```
 
@@ -224,7 +226,7 @@ theta_0 <- c(
   1E-2,  # beta_1
   1E-6,  # beta_2
   1E4,   # S_T
-  1     # sigma
+  1      # sigma
   )
 names(theta_0) <- c("beta_1", "beta_2", "S_T", "EcartType")
 # Lancement de la chaîne de Markov
@@ -283,24 +285,26 @@ acf(chain[-(1:burn_in), 1:(ncol(chain)-2)], lag.max = 1000)
 Éclaircie:
 ```{r}
 # Distribution a posteriori. Elimination du prechauffage et de la vraisemblance, éclaircie.
-posterior <- chain[-(1:burn_in), 1:(ncol(chain)-2)][seq(1, 
-    iterations - burn_in, by = 5000), ]
+posterior <- chain[-(1:burn_in), ][seq(1, iterations - burn_in, by = 5000), ]
 # Nouvelle distribution des paramètres
 par(mfrow = c(1, length(theta_0)))
 for (i in 1:length(theta_0)) {
     Titre <- paste("Distribution de", names(theta_0)[i])
     Mediane <- format(median(posterior[, i]), digits = 4)
     Moyenne <- format(mean(posterior[, i]), digits = 4)
-    hist(posterior[, i], xlab = paste("Mediane :", Mediane, "\n", "Moyenne :", Moyenne), main = Titre)
+    hist(
+      posterior[, i], 
+      xlab = paste("Mediane :", Mediane, "\n", "Moyenne :", Moyenne), 
+      main = Titre
+    )
     abline(v = Mediane, col = "red")
     abline(v = Moyenne, col = "green")
 }
-
 ```
 
 Nouvelle autocorrélation:
 ```{r}
-acf(posterior, lag.max = 100)
+acf(posterior[, 1:(ncol(chain)-1)], lag.max = 100)
 ```
 
 
@@ -309,37 +313,56 @@ acf(posterior, lag.max = 100)
 ```{r}
 library("tidyverse")
 library("entropart")
+# Médiane = valeur retenue
 (S_est <- median(posterior[, 3]))
+# Intervalle de crédibilité
+quantile(posterior[, 3], c(0.025, 0.5, 0.975))
+# Figure
 as.SimTest(S_est, posterior[, 3]) %>% autoplot
 ```
 
 # Prédictions
 
 ```{r}
-# Graphique du nombre cumulé d'espèces observé (data) et prédit (paramètres du modèle)
-Ajustement <- function(data, beta_1, beta_2, S_T, sigma) {
+# Nombre d'espèces prédites par période
+S_pred <- function(data, S_0, beta_1, beta_2, S_T, sigma) {
   # Stockage des S_i
   S <- numeric(length(data$Y))
   sum_S <- numeric(length(data$Y) + 1)
   sum_S[1] <- S_0
   # Calcul de S_i à chaque temps
   for (i in seq_along(data$Y)) {
-    S[i] <- exp(log(S_T*beta_1*T[i] 
-                      + beta_2*S_T*T[i]*Y[i] 
-                      + beta_1*T[i]*sum_S[i] 
-                      + beta_2*T[i]*Y[i]*sum_S[i]) 
-                  + rnorm(1, sd=sigma))
+    S[i] <- exp(log(S_T * beta_1 * T[i] 
+                      + beta_2 * S_T * T[i] * Y[i] 
+                      + beta_1 * T[i] * sum_S[i] 
+                      + beta_2 * T[i] * Y[i] * sum_S[i]) 
+                  + rnorm(1, sd = sigma))
     # Cumul des espèces découvertes
     sum_S[i+1] <- sum_S[i] + S[i]
   }
-  # Figure
-  tibble(`Année`=c(1817, 1817+5*data$Y), `Estimé`=sum_S, `Observé`=c(S_0, cumsum(data$S)+S_0)) %>% 
+  return(sum_S)
+}
+
+# Graphique du nombre cumulé d'espèces observé (data) et prédit (paramètres du modèle)
+Ajustement <- function(data, S_0, beta_1, beta_2, S_T, sigma) {
+  tibble(
+    `Année`=c(1822, 1822 + 5 * data$Y), 
+    `Estimé`= S_pred(data, S_0, beta_1, beta_2, S_T, sigma), 
+    `Observé`= c(S_0, cumsum(data$S) + S_0)
+  ) %>% 
     pivot_longer(cols = c("Estimé", "Observé")) %>% 
-    rename(`Nb espèces`=name, `Nombre`=value) %>% 
+    rename(`Nb espèces` = name, `Nombre` = value) %>% 
     ggplot() +
-      geom_line(aes(x=`Année`, y=`Nombre`, color=`Nb espèces`)) +
+      geom_line(aes(x = `Année`, y = `Nombre`, color = `Nb espèces`)) +
       scale_y_log10() %>% 
     return
+}
+
+# Ecart moyen entre nombre d'espèces prédites et observées, en % d'erreur
+Ecart <- function(data, S_0, beta_1, beta_2, S_T, sigma) {
+  S_predicted <- S_pred(data, S_0, beta_1, beta_2, S_T, sigma)
+  S_observed <- c(S_0, cumsum(data$S)+S_0)
+  return(exp(mean(abs(log(S_predicted / S_observed)))) - 1)
 }
 ```
 
@@ -350,7 +373,8 @@ beta_1 <- median(posterior[, 1])
 beta_2 <- median(posterior[, 2])
 (S_T <-    median(posterior[, 3]))
 sigma <-  median(posterior[, 4])
-Ajustement(data, beta_1, beta_2, S_T, sigma)
+Ecart(data, S_0, beta_1, beta_2, S_T, sigma)
+Ajustement(data, S_0, beta_1, beta_2, S_T, sigma)
 ```
 
 Les moyennes surestiment le nombre d'espèces.
@@ -361,7 +385,8 @@ beta_1 <- mean(posterior[, 1])
 beta_2 <- mean(posterior[, 2])
 (S_T <-   mean(posterior[, 3]))
 sigma <-  mean(posterior[, 4])
-Ajustement(data, beta_1, beta_2, S_T, sigma)
+Ecart(data, S_0, beta_1, beta_2, S_T, sigma)
+Ajustement(data, S_0, beta_1, beta_2, S_T, sigma)
 ```
 
 La robustesse de l'estimation est évaluée en prenant les valeurs extrêmes du nombre d'espèces estimées.
@@ -373,7 +398,8 @@ beta_1 <- posterior[iteration, 1]
 beta_2 <- posterior[iteration, 2]
 (S_T <-   posterior[iteration, 3])
 sigma <-  posterior[iteration, 4]
-Ajustement(data, beta_1, beta_2, S_T, sigma)
+Ecart(data, S_0, beta_1, beta_2, S_T, sigma)
+Ajustement(data, S_0, beta_1, beta_2, S_T, sigma)
 ```
 
 ```{r}
@@ -383,13 +409,60 @@ beta_1 <- posterior[iteration, 1]
 beta_2 <- posterior[iteration, 2]
 (S_T <-   posterior[iteration, 3])
 sigma <-  posterior[iteration, 4]
-Ajustement(data, beta_1, beta_2, S_T, sigma)
+Ecart(data, S_0, beta_1, beta_2, S_T, sigma)
+Ajustement(data, S_0, beta_1, beta_2, S_T, sigma)
 ```
 
 L'ajustement du modèle aux données est bon dans tous les cas.
+
+# Corrélation entre les paramètres
 
 L'estimation du nombre total d'espèces est corrélée négativement aux paramètres d'efficacité des taxonomistes: le modèle est donc peu discriminant.
 
 ```{r}
 cor(posterior)
 ```
+
+Le nombre d'espèces estimé est expliqué à 40% par les deux paramètres $\beta_1$ et $\beta_2$:
+
+```{r}
+lm(posterior[, 3] ~ posterior[, 1] + posterior[, 2]) %>% summary
+```
+
+
+
+# Sélection du meilleur ajustement
+
+L'écart moyen est donné en fonction du nombre d'espèces estimées en parcourant la chaîne de Markov.
+
+```{r}
+Ecarts <- numeric(nrow(posterior))
+for (i in seq_len(nrow(posterior))) {
+  beta_1 <- posterior[i, 1]
+  beta_2 <- posterior[i, 2]
+  S_T <- posterior[i, 3]
+  sigma <-  median(posterior[, 4])
+  Ecarts[i] <- Ecart(data, S_0, beta_1, beta_2, S_T, sigma)
+}
+plot(x = posterior[, 3], y = Ecarts)
+loess_model <- loess(Ecarts ~ posterior[, 3])
+seq_richness <- (1:200)* 1000
+predictions <- predict(loess_model, seq_richness)
+lines(x = seq_richness, y = predictions, col = "red")
+abline(v = which.min(predictions) * 1000, col = "green")
+```
+
+# Sélection du maximum de vraisemblance
+
+```{r}
+plot(x = posterior[, 3], y = posterior[, 5])
+loess_model <- loess(posterior[, 5] ~ posterior[, 3])
+seq_richness <- (1:200)* 1000
+predictions <- predict(loess_model, seq_richness)
+lines(x = seq_richness, y = predictions, col = "red")
+# Quelle valeur de S_T maximise la vraisemblace moyenne ?
+abline(v = which.max(predictions) * 1000, col = "green")
+# Quelle valeur de S_T correspond à l'estimation avec la plus grande vraisemblance ponctuelle ?
+abline(v = posterior[which.max(posterior[, 5]), 3], col = "blue")
+```
+
